@@ -253,16 +253,14 @@ pub fn enabled() -> bool {
 }
 
 /// Whether background (isolated seat) input is admitted for `pid`'s windows,
-/// the check a background action makes before dispatch. `Err` carries the
-/// refusal reason (`client_not_qualified`, ...). Only meaningful while
+/// the check a background action makes before dispatch. Every client is
+/// admitted: the compositor plugin binds each action to the exact live pid and
+/// window address and rejects stale geometry, desktop changes and busy lanes,
+/// which is what keeps the user's desktop untouched. Only meaningful while
 /// [`enabled`]: without the isolated seats the tools route background input
 /// elsewhere.
-pub fn background_admission(pid: u32) -> std::result::Result<(), &'static str> {
-    if protocol() == InputProtocol::Production {
-        super::hyprland_compatibility::qualify(pid)
-    } else {
-        Ok(())
-    }
+pub fn background_admission(_pid: u32) -> std::result::Result<(), &'static str> {
+    Ok(())
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1219,8 +1217,8 @@ fn execute_actions_routed(
         route == DeliveryRoute::Background || protocol() == InputProtocol::Production,
         "foreground input requires production protocol; no downgrade is permitted"
     );
-    if route == DeliveryRoute::Background && protocol() == InputProtocol::Production {
-        if let Err(reason) = super::hyprland_compatibility::qualify(pid) {
+    if route == DeliveryRoute::Background {
+        if let Err(reason) = background_admission(pid) {
             return Ok(json!({"ok":false,"code":reason,"detail":reason}));
         }
     }
@@ -1824,6 +1822,16 @@ mod tests {
         assert_eq!(result["delivery"]["delivered_count"], 1);
         assert!(slot.is_none());
         server.join().unwrap();
+    }
+
+    #[test]
+    fn background_admission_admits_any_client_process() {
+        // The test binary is not a packaged, version-pinned application: the
+        // old pacman qualification refused it with `client_not_qualified`.
+        assert_eq!(background_admission(std::process::id()), Ok(()));
+        // An exited or unknown pid is admitted too; the compositor binds the
+        // exact live pid and window address and refuses a stale target.
+        assert_eq!(background_admission(u32::MAX), Ok(()));
     }
 
     #[test]

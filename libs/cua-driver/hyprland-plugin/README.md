@@ -35,12 +35,15 @@ testing, packaging, and release requirements.
 Bounded instrumented app proof and an uninstrumented smoke are retained from
 source `f180e8828b8f31cc153e3c44eaa89a9c13c5bc68`, with an unchanged plugin
 tree and uninstrumented module hash at
-`1133a06e4f205cf80188a7ac9e41102f37611fea`. Raw background qualification is
-limited to native Calc from `libreoffice-fresh 26.2.5-3`, Inkscape `1.4.4-6`,
-the plain compiled `evdev`/`pc105`/`us` keymap, and the two seats `Cua-Agent`
-and `Cua-Agent-2`. The proof covers the recorded actions and observation
-intervals. Chromium, Electron, and XWayland raw background input remain
-unqualified; semantic AT-SPI actions are separate.
+`1133a06e4f205cf80188a7ac9e41102f37611fea`. That proof used native Calc from
+`libreoffice-fresh 26.2.5-3`, Inkscape `1.4.4-6`, the plain compiled
+`evdev`/`pc105`/`us` keymap, and the two seats `Cua-Agent` and `Cua-Agent-2`,
+and covers the recorded actions and observation intervals. The Driver no
+longer restricts raw background input to those packages: it admits every
+native Wayland client, and the plugin's exact pid/window binding, geometry,
+desktop and lane checks decide delivery. XWayland windows are not reachable
+through an isolated Wayland seat and still refuse; semantic AT-SPI actions are
+separate.
 
 The exact-target foreground route intentionally changes primary focus and,
 for pointer actions, cursor position, without restoration. The canonical native
