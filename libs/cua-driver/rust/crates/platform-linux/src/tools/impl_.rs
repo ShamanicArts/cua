@@ -4839,6 +4839,45 @@ fn isolated_background_routes_do_not_reprobe_availability_before_primary_fallbac
 
 #[cfg(test)]
 #[test]
+fn double_and_right_click_use_the_isolated_seat_before_any_background_refusal() {
+    // Both tools refused background input on Hyprland for every app with
+    // FocusedInputOnly although ClickTool's isolated seat carries count and
+    // button. The delegation must precede each X11/Wayland refusal.
+    let source = include_str!("impl_.rs");
+    for (start, end) in [
+        (
+            "impl Tool for DoubleClickTool {",
+            "impl Tool for RightClickTool {",
+        ),
+        ("impl Tool for RightClickTool {", "pub struct DragTool {"),
+    ] {
+        let body = source
+            .rsplit_once(start)
+            .unwrap()
+            .1
+            .split_once(end)
+            .unwrap()
+            .0;
+        let invoke = body.split_once("async fn invoke").unwrap().1;
+        let delegation = invoke
+            .find("hyprland_foreground(delivery) || isolated_hyprland_background(delivery)")
+            .expect(start);
+        for refusal in [
+            "unavailable_chromium_background(",
+            "unavailable_webkit_background(",
+            "unavailable_gtk_pointer_background(",
+            "unavailable_wayland_focused_input_background(",
+        ] {
+            assert!(
+                invoke.find(refusal).expect(refusal) > delegation,
+                "{start} {refusal}"
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+#[test]
 fn background_keyboard_refusal_names_missing_atspi_bus() {
     let plain = crate::input::delivery::background_unavailable_error(
         crate::input::delivery::BackgroundUnavailable::FocusedInputOnly,
@@ -10304,6 +10343,18 @@ impl Tool for DoubleClickTool {
             Err(e) => return e,
         };
         let delivery = crate::input::delivery::DeliveryMode::from_args(&args);
+        if hyprland_foreground(delivery) || isolated_hyprland_background(delivery) {
+            // Share exact-target validation and the admitted native click
+            // lifecycle, including the isolated Hyprland seat in background.
+            let mut args = args;
+            args["button"] = json!("left");
+            args["count"] = json!(2);
+            return ClickTool {
+                state: self.state.clone(),
+            }
+            .invoke(args)
+            .await;
+        }
         if let Some(refusal) = unavailable_chromium_background(pid, delivery) {
             return refusal;
         }
@@ -10315,17 +10366,6 @@ impl Tool for DoubleClickTool {
         }
         if let Some(refusal) = unavailable_wayland_focused_input_background(delivery, true) {
             return refusal;
-        }
-        if hyprland_foreground(delivery) {
-            // Share exact-target validation and the admitted native click lifecycle.
-            let mut args = args;
-            args["button"] = json!("left");
-            args["count"] = json!(2);
-            return ClickTool {
-                state: self.state.clone(),
-            }
-            .invoke(args)
-            .await;
         }
         let resolved = match self.state.snapshots.resolve(pid as i32, &args) {
             Ok(r) => r,
@@ -10591,6 +10631,18 @@ impl Tool for RightClickTool {
             Err(e) => return e,
         };
         let delivery = crate::input::delivery::DeliveryMode::from_args(&args);
+        if hyprland_foreground(delivery) || isolated_hyprland_background(delivery) {
+            // Share exact-target validation and the admitted native click
+            // lifecycle, including the isolated Hyprland seat in background.
+            let mut args = args;
+            args["button"] = json!("right");
+            args["count"] = json!(1);
+            return ClickTool {
+                state: self.state.clone(),
+            }
+            .invoke(args)
+            .await;
+        }
         if let Some(refusal) = unavailable_chromium_background(pid, delivery) {
             return refusal;
         }
@@ -10602,17 +10654,6 @@ impl Tool for RightClickTool {
         }
         if let Some(refusal) = unavailable_wayland_focused_input_background(delivery, true) {
             return refusal;
-        }
-        if hyprland_foreground(delivery) {
-            // Share exact-target validation and the admitted native click lifecycle.
-            let mut args = args;
-            args["button"] = json!("right");
-            args["count"] = json!(1);
-            return ClickTool {
-                state: self.state.clone(),
-            }
-            .invoke(args)
-            .await;
         }
         let resolved = match self.state.snapshots.resolve(pid as i32, &args) {
             Ok(r) => r,
